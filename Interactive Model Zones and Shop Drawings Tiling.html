@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Interactive Tiling Matchline Assistant</title>
+
+<!-- Google Font -->
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --cell-size: 58px;
+    --radius: 6px;
+  }
+
+  body {
+    font-family: 'Poppins', sans-serif;
+    display: flex;
+    gap: 30px;
+    padding: 40px;
+    margin: 0;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e8eef5 100%);
+  }
+
+  .grid-container {
+    position: relative;
+    display: inline-block;
+    padding: 12px;
+    background: white;
+    border-radius: var(--radius);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  }
+
+  .title {
+    font-size: 22px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 15px;
+    text-align: center;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(8, var(--cell-size));
+    grid-template-rows: repeat(12, var(--cell-size));
+    border: 2px solid #444;
+  }
+
+  .cell {
+    border: 1px solid #ddd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #fafafa;
+  }
+
+  .cell:hover {
+    background: #e8f0ff;
+    transform: scale(1.02);
+  }
+
+  .cell.selected {
+    background: #ffe5e5;
+    border: 2px solid #ff4d4d;
+    font-weight: bold;
+  }
+
+  .cell.neighbor {
+    background: #e3f2fd;
+    border: 2px solid #2196f3;
+  }
+
+  /* Zone coloring Backgrounds */
+  .zone-ZA {background-color:#E3F2FD !important;}
+  .zone-ZB {background-color:#F8BBD0 !important;}
+  .zone-ZF {background-color:#FFECB3 !important;}
+  .zone-ZC {background-color:#E1BEE7 !important;}
+  .zone-ZE {background-color:#DCEDC8 !important;}
+  .zone-ZD {background-color:#FFE0B2 !important;}
+
+  /* Info Panel */
+  .info-panel {
+    background: white;
+    padding: 20px;
+    min-width: 280px;
+    border-radius: var(--radius);
+    box-shadow: 0px 4px 16px rgba(0,0,0,0.1);
+  }
+
+  .info-header {
+    font-weight: 600;
+    margin-bottom: 10px;
+    font-size: 18px;
+  }
+
+  .info-row {
+    margin: 6px 0;
+  }
+
+  .label { font-weight: 600; }
+  .code {
+    font-family: Consolas, monospace;
+    background: #f3f3f3;
+    padding: 3px 5px;
+    border-radius: 3px;
+  }
+
+  pre {
+    padding: 10px;
+    background: #f3f3f3;
+    border-radius: var(--radius);
+    white-space: pre-wrap;
+    font-size: 12px;
+  }
+
+</style>
+</head>
+<body>
+
+<div class="grid-container">
+  <div class="title">Tiling Matchline Locator</div>
+  <div id="grid" class="grid"></div>
+</div>
+
+<div class="info-panel">
+  <div class="info-header">Matchline Continuation</div>
+  
+  <div class="info-row"><span class="label">Selected:</span> <span id="sel" class="code">—</span></div>
+  <div class="info-row"><span class="label">Top:</span> <span id="top" class="code">—</span></div>
+  <div class="info-row"><span class="label">Right:</span> <span id="right" class="code">—</span></div>
+  <div class="info-row"><span class="label">Bottom:</span> <span id="bottom" class="code">—</span></div>
+  <div class="info-row"><span class="label">Left:</span> <span id="left" class="code">—</span></div>
+  
+  <pre id="cont"></pre>
+</div>
+
+<script>
+  const ROWS = 12, COLS = 8;
+  const zoneMatrix = [["ZA", "ZB"],["ZF", "ZC"],["ZE", "ZD"]];
+  
+  const gridEl = document.getElementById("grid");
+
+  // Generate correct name using clockwise logic
+  function getPartName(row, col) {
+    const zoneR = Math.floor(row / 4);
+    const zoneC = Math.floor(col / 4);
+    const zone = zoneMatrix[zoneR][zoneC];
+
+    const lr = row % 4, lc = col % 4;
+
+    const subR = Math.floor(lr / 2), subC = Math.floor(lc / 2);
+    let subIndex = (subR === 0 && subC === 0) ? 1 :
+                   (subR === 0 && subC === 1) ? 2 :
+                   (subR === 1 && subC === 1) ? 3 : 4;
+
+    const pR = lr % 2, pC = lc % 2;
+    let partIndex = (pR === 0 && pC === 0) ? 1 :
+                    (pR === 0 && pC === 1) ? 2 :
+                    (pR === 1 && pC === 1) ? 3 : 4;
+
+    return `${zone}${subIndex}-${partIndex}`;
+  }
+
+  // Create grid
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const div = document.createElement("div");
+      div.className = `cell zone-${zoneMatrix[Math.floor(r / 4)][Math.floor(c / 4)]}`;
+      div.dataset.row = r;
+      div.dataset.col = c;
+      div.dataset.name = getPartName(r, c);
+      div.textContent = div.dataset.name;
+      div.onclick = () => handleClick(div);
+      gridEl.appendChild(div);
+    }
+  }
+
+  function getCell(r, c) {
+    if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return null;
+    return gridEl.children[r * COLS + c];
+  }
+
+  function clear() {
+    [...gridEl.children].forEach(c => c.classList.remove("selected", "neighbor"));
+  }
+
+  function handleClick(cell) {
+    clear();
+    cell.classList.add("selected");
+
+    const r = +cell.dataset.row, c = +cell.dataset.col;
+
+    const top = getCell(r-1, c);
+    const down = getCell(r+1, c);
+    const left = getCell(r, c-1);
+    const right = getCell(r, c+1);
+
+    [top, right, down, left].forEach(n => n?.classList.add("neighbor"));
+
+    document.getElementById("sel").textContent = cell.dataset.name;
+    document.getElementById("top").textContent = top?.dataset.name ?? "—";
+    document.getElementById("right").textContent = right?.dataset.name ?? "—";
+    document.getElementById("bottom").textContent = down?.dataset.name ?? "—";
+    document.getElementById("left").textContent = left?.dataset.name ?? "—";
+
+    document.getElementById("cont").textContent = `
+${top ? `FOR CONTINUATION REFER TO ${top.dataset.name}` : ""}
+${right ? `FOR CONTINUATION REFER TO ${right.dataset.name}` : ""}
+${down ? `FOR CONTINUATION REFER TO ${down.dataset.name}` : ""}
+${left ? `FOR CONTINUATION REFER TO ${left.dataset.name}` : ""}
+    `.trim();
+  }
+</script>
+
+</body>
+</html>
